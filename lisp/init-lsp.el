@@ -30,8 +30,9 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'init-custom))
+(require 'init-const)
+(require 'init-custom)
+(require 'init-funcs)
 
 (pcase centaur-lsp
   ('eglot
@@ -42,96 +43,142 @@
    ;; Emacs client for the Language Server Protocol
    ;; https://github.com/emacs-lsp/lsp-mode#supported-languages
    (use-package lsp-mode
+     :defines (lsp-clients-python-library-directories
+               lsp-rust-server)
+     :commands (lsp-enable-which-key-integration
+                lsp-format-buffer
+                lsp-organize-imports
+                lsp-install-server)
      :diminish
-     :hook (prog-mode . lsp-deferred)
+     :hook ((prog-mode . (lambda ()
+                           (unless (derived-mode-p 'emacs-lisp-mode 'lisp-mode)
+                             (lsp-deferred))))
+            (lsp-mode . (lambda ()
+                          ;; Integrate `which-key'
+                          (lsp-enable-which-key-integration)
+
+                          ;; Format and organize imports
+                          (unless (apply #'derived-mode-p centaur-lsp-format-on-save-ignore-modes)
+                            (add-hook 'before-save-hook #'lsp-format-buffer t t)
+                            (add-hook 'before-save-hook #'lsp-organize-imports t t)))))
      :bind (:map lsp-mode-map
-            ("C-c C-d" . lsp-describe-thing-at-point))
-     :init (setq lsp-auto-guess-root t        ; Detect project root
-                 lsp-keep-workspace-alive nil ; Auto-kill LSP server
-                 lsp-prefer-flymake nil       ; Use lsp-ui and flycheck
-                 flymake-fringe-indicator-position 'right-fringe)
+            ("C-c C-d" . lsp-describe-thing-at-point)
+            ([remap xref-find-definitions] . lsp-find-definition)
+            ([remap xref-find-references] . lsp-find-references))
+     :init
+     ;; @see https://emacs-lsp.github.io/lsp-mode/page/performance
+     (setq read-process-output-max (* 1024 1024)) ;; 1MB
+
+     (setq lsp-keymap-prefix "C-c l"
+           lsp-keep-workspace-alive nil
+           lsp-signature-auto-activate nil
+           lsp-modeline-code-actions-enable nil
+           lsp-modeline-diagnostics-enable nil
+           lsp-modeline-workspace-status-enable nil
+
+           lsp-enable-file-watchers nil
+           lsp-enable-folding nil
+           lsp-enable-semantic-highlighting nil
+           lsp-enable-symbol-highlighting nil
+           lsp-enable-text-document-color nil
+
+           lsp-enable-indentation nil
+           lsp-enable-on-type-formatting nil)
+
+     ;; For `lsp-clients'
+     (setq lsp-clients-python-library-directories '("/usr/local/" "/usr/"))
+     (when (executable-find "rust-analyzer")
+       (setq lsp-rust-server 'rust-analyzer))
      :config
-     ;; Configure LSP clients
-     (use-package lsp-clients
-       :ensure nil
-       :functions (lsp-format-buffer lsp-organize-imports)
-       :hook (go-mode . (lambda ()
-                          "Format and add/delete imports."
-                          (add-hook 'before-save-hook #'lsp-format-buffer t t)
-                          (add-hook 'before-save-hook #'lsp-organize-imports t t)))
-       :init
-       (setq lsp-clients-python-library-directories '("/usr/local/" "/usr/"))
-       (unless (executable-find "rls")
-         (setq lsp-rust-rls-server-command '("rustup" "run" "stable" "rls")))))
+     (with-no-warnings
+       (defun my-lsp--init-if-visible (func &rest args)
+         "Not enabling lsp in `git-timemachine-mode'."
+         (unless (bound-and-true-p git-timemachine-mode)
+           (apply func args)))
+       (advice-add #'lsp--init-if-visible :around #'my-lsp--init-if-visible))
+
+     (defun lsp-update-server ()
+       "Update LSP server."
+       (interactive)
+       ;; Equals to `C-u M-x lsp-install-server'
+       (lsp-install-server t)))
 
    (use-package lsp-ui
      :custom-face
-     (lsp-ui-doc-background ((t (:background ,(face-background 'tooltip)))))
      (lsp-ui-sideline-code-action ((t (:inherit warning))))
      :pretty-hydra
-     ((:title (pretty-hydra-title "LSP UI" 'faicon "rocket")
+     ((:title (pretty-hydra-title "LSP UI" 'faicon "rocket" :face 'all-the-icons-green)
        :color amaranth :quit-key "q")
       ("Doc"
-       (("d e" lsp-ui-doc-enable "enable" :toggle t)
-        ("d s" lsp-ui-doc-include-signature "signature" :toggle t)
-        ("d t" (setq lsp-ui-doc-position 'top) "top" :toggle (eq lsp-ui-doc-position 'top))
-        ("d b" (setq lsp-ui-doc-position 'bottom) "bottom" :toggle (eq lsp-ui-doc-position 'bottom))
-        ("d p" (setq lsp-ui-doc-position 'at-point) "at point" :toggle (eq lsp-ui-doc-position 'at-point))
-        ("d f" (setq lsp-ui-doc-alignment 'frame) "align frame" :toggle (eq lsp-ui-doc-alignment 'frame))
-        ("d w" (setq lsp-ui-doc-alignment 'window) "align window" :toggle (eq lsp-ui-doc-alignment 'window)))
+       (("d e" (progn
+                 (lsp-ui-doc-enable (not lsp-ui-doc-mode))
+                 (setq lsp-ui-doc-enable (not lsp-ui-doc-enable)))
+         "enable" :toggle lsp-ui-doc-mode)
+        ("d s" (setq lsp-ui-doc-include-signature (not lsp-ui-doc-include-signature))
+         "signature" :toggle lsp-ui-doc-include-signature)
+        ("d t" (setq lsp-ui-doc-position 'top)
+         "top" :toggle (eq lsp-ui-doc-position 'top))
+        ("d b" (setq lsp-ui-doc-position 'bottom)
+         "bottom" :toggle (eq lsp-ui-doc-position 'bottom))
+        ("d p" (setq lsp-ui-doc-position 'at-point)
+         "at point" :toggle (eq lsp-ui-doc-position 'at-point))
+        ("d h" (setq lsp-ui-doc-header (not lsp-ui-doc-header))
+         "header" :toggle lsp-ui-doc-header)
+        ("d f" (setq lsp-ui-doc-alignment 'frame)
+         "align frame" :toggle (eq lsp-ui-doc-alignment 'frame))
+        ("d w" (setq lsp-ui-doc-alignment 'window)
+         "align window" :toggle (eq lsp-ui-doc-alignment 'window)))
        "Sideline"
-       (("s e" lsp-ui-sideline-enable "enable" :toggle t)
-        ("s h" lsp-ui-sideline-show-hover "hover" :toggle t)
-        ("s d" lsp-ui-sideline-show-diagnostics "diagnostics" :toggle t)
-        ("s s" lsp-ui-sideline-show-symbol "symbol" :toggle t)
-        ("s c" lsp-ui-sideline-show-code-actions "code actions" :toggle t)
-        ("s i" lsp-ui-sideline-ignore-duplicate "ignore duplicate" :toggle t))))
+       (("s e" (progn
+                 (lsp-ui-sideline-enable (not lsp-ui-sideline-mode))
+                 (setq lsp-ui-sideline-enable (not lsp-ui-sideline-enable)))
+         "enable" :toggle lsp-ui-sideline-mode)
+        ("s h" (setq lsp-ui-sideline-show-hover (not lsp-ui-sideline-show-hover))
+         "hover" :toggle lsp-ui-sideline-show-hover)
+        ("s d" (setq lsp-ui-sideline-show-diagnostics (not lsp-ui-sideline-show-diagnostics))
+         "diagnostics" :toggle lsp-ui-sideline-show-diagnostics)
+        ("s s" (setq lsp-ui-sideline-show-symbol (not lsp-ui-sideline-show-symbol))
+         "symbol" :toggle lsp-ui-sideline-show-symbol)
+        ("s c" (setq lsp-ui-sideline-show-code-actions (not lsp-ui-sideline-show-code-actions))
+         "code actions" :toggle lsp-ui-sideline-show-code-actions)
+        ("s i" (setq lsp-ui-sideline-ignore-duplicate (not lsp-ui-sideline-ignore-duplicate))
+         "ignore duplicate" :toggle lsp-ui-sideline-ignore-duplicate))
+       "Action"
+       (("h" backward-char "←")
+        ("j" next-line "↓")
+        ("k" previous-line "↑")
+        ("l" forward-char "→")
+        ("C-a" mwim-beginning-of-code-or-line nil)
+        ("C-e" mwim-end-of-code-or-line nil)
+        ("C-b" backward-char nil)
+        ("C-n" next-line nil)
+        ("C-p" previous-line nil)
+        ("C-f" forward-char nil)
+        ("M-b" backward-word nil)
+        ("M-f" forward-word nil)
+        ("c" lsp-ui-sideline-apply-code-actions "apply code actions"))))
      :bind (("C-c u" . lsp-ui-imenu)
             :map lsp-ui-mode-map
             ("M-<f6>" . lsp-ui-hydra/body)
-            ([remap xref-find-definitions] . lsp-ui-peek-find-definitions)
-            ([remap xref-find-references] . lsp-ui-peek-find-references))
-     :init (setq lsp-ui-doc-enable t
-                 lsp-ui-doc-use-webkit nil
-                 lsp-ui-doc-delay 0.2
-                 lsp-ui-doc-include-signature t
+            ("M-RET" . lsp-ui-sideline-apply-code-actions))
+     :hook (lsp-mode . lsp-ui-mode)
+     :init (setq lsp-ui-sideline-show-diagnostics nil
+                 lsp-ui-sideline-ignore-duplicate t
                  lsp-ui-doc-position 'at-point
-                 lsp-ui-doc-border (face-foreground 'default)
-                 lsp-eldoc-enable-hover nil ; Disable eldoc displays in minibuffer
-
-                 lsp-ui-imenu-enable t
+                 lsp-ui-doc-border (face-foreground 'font-lock-comment-face)
                  lsp-ui-imenu-colors `(,(face-foreground 'font-lock-keyword-face)
                                        ,(face-foreground 'font-lock-string-face)
                                        ,(face-foreground 'font-lock-constant-face)
-                                       ,(face-foreground 'font-lock-variable-name-face))
-
-                 lsp-ui-sideline-enable t
-                 lsp-ui-sideline-show-hover nil
-                 lsp-ui-sideline-show-diagnostics nil
-                 lsp-ui-sideline-ignore-duplicate t)
+                                       ,(face-foreground 'font-lock-variable-name-face)))
      :config
-     (add-to-list 'lsp-ui-doc-frame-parameters '(right-fringe . 8))
-
      ;; `C-g'to close doc
      (advice-add #'keyboard-quit :before #'lsp-ui-doc-hide)
 
      ;; Reset `lsp-ui-doc-background' after loading theme
      (add-hook 'after-load-theme-hook
                (lambda ()
-                 (setq lsp-ui-doc-border (face-foreground 'default))
-                 (set-face-background 'lsp-ui-doc-background
-                                      (face-background 'tooltip))))
-
-     ;; WORKAROUND Hide mode-line of the lsp-ui-imenu buffer
-     ;; @see https://github.com/emacs-lsp/lsp-ui/issues/243
-     (defun my-lsp-ui-imenu-hide-mode-line ()
-       "Hide the mode-line in lsp-ui-imenu."
-       (setq mode-line-format nil))
-     (advice-add #'lsp-ui-imenu :after #'my-lsp-ui-imenu-hide-mode-line))
-
-   ;; Completion
-   (use-package company-lsp
-     :init (setq company-lsp-cache-candidates 'auto))
+                 (setq lsp-ui-doc-border (face-foreground 'font-lock-comment-face))
+                 (set-face-background 'lsp-ui-doc-background (face-background 'tooltip)))))
 
    ;; Ivy integration
    (use-package lsp-ivy
@@ -140,31 +187,31 @@
             ([remap xref-find-apropos] . lsp-ivy-workspace-symbol)
             ("C-s-." . lsp-ivy-global-workspace-symbol)))
 
-   ;; Origami integration
-   (use-package lsp-origami
-     :after lsp-mode
-     :hook (origami-mode . lsp-origami-mode))
-
    ;; Debug
-   (use-package dap-mode
-     :diminish
-     :functions dap-hydra/nil
-     :bind (:map lsp-mode-map
-            ("<f5>" . dap-debug)
-            ("M-<f5>" . dap-hydra))
-     :hook ((after-init . dap-mode)
-            (dap-mode . dap-ui-mode)
-            (dap-session-created . (lambda (&_rest) (dap-hydra)))
-            (dap-terminated . (lambda (&_rest) (dap-hydra/nil)))
+   (when emacs/>=26p
+     (use-package dap-mode
+       :defines dap-python-executable
+       :functions dap-hydra/nil
+       :diminish
+       :bind (:map lsp-mode-map
+              ("<f5>" . dap-debug)
+              ("M-<f5>" . dap-hydra))
+       :hook ((after-init . dap-auto-configure-mode)
+              (dap-stopped . (lambda (_args) (dap-hydra)))
+              (dap-terminated . (lambda (_args) (dap-hydra/nil)))
 
-            (python-mode . (lambda () (require 'dap-python)))
-            (ruby-mode . (lambda () (require 'dap-ruby)))
-            (go-mode . (lambda () (require 'dap-go)))
-            (java-mode . (lambda () (require 'dap-java)))
-            ((c-mode c++-mode objc-mode swift) . (lambda () (require 'dap-lldb)))
-            (php-mode . (lambda () (require 'dap-php)))
-            (elixir-mode . (lambda () (require 'dap-elixir)))
-            ((js-mode js2-mode) . (lambda () (require 'dap-chrome)))))
+              (python-mode . (lambda () (require 'dap-python)))
+              (ruby-mode . (lambda () (require 'dap-ruby)))
+              (go-mode . (lambda () (require 'dap-go)))
+              (java-mode . (lambda () (require 'dap-java)))
+              ((c-mode c++-mode objc-mode swift-mode) . (lambda () (require 'dap-lldb)))
+              (php-mode . (lambda () (require 'dap-php)))
+              (elixir-mode . (lambda () (require 'dap-elixir)))
+              ((js-mode js2-mode) . (lambda () (require 'dap-chrome)))
+              (powershell-mode . (lambda () (require 'dap-pwsh))))
+       :init
+       (when (executable-find "python3")
+         (setq dap-python-executable "python3"))))
 
    ;; `lsp-mode' and `treemacs' integration
    (when emacs/>=25.2p
@@ -174,6 +221,7 @@
               ("C-<f8>" . lsp-treemacs-errors-list)
               ("M-<f8>" . lsp-treemacs-symbols)
               ("s-<f8>" . lsp-treemacs-java-deps-list))
+       :init (lsp-treemacs-sync-mode 1)
        :config
        (with-eval-after-load 'ace-window
          (when (boundp 'aw-ignored-buffers)
@@ -181,7 +229,7 @@
            (push 'lsp-treemacs-java-deps-mode aw-ignored-buffers)))
 
        (with-no-warnings
-	     (when (require 'all-the-icons nil t)
+         (when (require 'all-the-icons nil t)
            (treemacs-create-theme "centaur-colors"
              :extends "doom-colors"
              :config
@@ -199,7 +247,7 @@
                 :icon (format "%s " (all-the-icons-material "palette" :height 0.95 :v-adjust -0.15))
                 :extensions (color-palette))
                (treemacs-create-icon
-                :icon (format "%s " (all-the-icons-faicon "square-o" :height 0.95 :v-adjust -0.05))
+                :icon (format "%s " (all-the-icons-faicon "square-o" :height 0.95 :v-adjust -0.15))
                 :extensions (constant))
                (treemacs-create-icon
                 :icon (format "%s " (all-the-icons-faicon "file-text-o" :height 0.95 :v-adjust -0.05))
@@ -351,33 +399,44 @@
 
            (setq lsp-treemacs-theme "centaur-colors")))))
 
-   ;; Microsoft python-language-server support
-   (use-package lsp-python-ms
+   ;; Python: pyright
+   (use-package lsp-pyright
+     :preface
+     ;; Use yapf to format
+     (defun lsp-pyright-format-buffer ()
+       (interactive)
+       (when (and (executable-find "yapf") buffer-file-name)
+         (call-process "yapf" nil nil nil "-i" buffer-file-name)))
      :hook (python-mode . (lambda ()
-                            (require 'lsp-python-ms)
-                            (lsp-deferred)))
-     :init
-     (when (executable-find "python3")
-       (setq lsp-python-ms-python-executable-cmd "python3")))
+                            (require 'lsp-pyright)
+                            (add-hook 'after-save-hook #'lsp-pyright-format-buffer t t)))
+     :init (when (executable-find "python3")
+             (setq lsp-pyright-python-executable-cmd "python3")))
 
    ;; C/C++/Objective-C support
    (use-package ccls
      :defines projectile-project-root-files-top-down-recurring
-     :hook ((c-mode c++-mode objc-mode cuda-mode) . (lambda ()
-                                                      (require 'ccls)
-                                                      (lsp-deferred)))
+     :hook ((c-mode c++-mode objc-mode cuda-mode) . (lambda () (require 'ccls)))
      :config
      (with-eval-after-load 'projectile
        (setq projectile-project-root-files-top-down-recurring
-             (append '("compile_commands.json"
-                       ".ccls")
+             (append '("compile_commands.json" ".ccls")
                      projectile-project-root-files-top-down-recurring))))
 
+   ;; Swift/C/C++/Objective-C
+   (when sys/macp
+     (use-package lsp-sourcekit
+       :init (setq lsp-sourcekit-executable
+                   "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/sourcekit-lsp")))
+
+   ;; Julia support
+   (use-package lsp-julia
+     :hook (julia-mode . (lambda () (require 'lsp-julia))))
+
    ;; Java support
-   (use-package lsp-java
-     :hook (java-mode . (lambda ()
-                          (require 'lsp-java)
-                          (lsp-deferred))))))
+   (when emacs/>=25.2p
+     (use-package lsp-java
+       :hook (java-mode . (lambda () (require 'lsp-java)))))))
 
 (when centaur-lsp
   ;; Enable LSP in org babel
@@ -389,20 +448,17 @@
            (intern-pre (intern (format "lsp--%s" (symbol-name edit-pre)))))
       `(progn
          (defun ,intern-pre (info)
-           (let ((filename (or (->> info caddr (alist-get :file))
-                               buffer-file-name)))
-             (unless filename
-               (user-error "LSP:: specify `:file' property to enable."))
+           (let ((file-name (->> info caddr (alist-get :file))))
+             (unless file-name
+               (user-error "LSP:: specify `:file' property to enable"))
 
-             (setq buffer-file-name filename)
+             (setq buffer-file-name file-name)
              (pcase centaur-lsp
                ('eglot
-                (and (fboundp 'eglot) (eglot)))
+                (and (fboundp 'eglot-ensure) (eglot-ensure)))
                ('lsp-mode
-                (and (fboundp 'lsp-deferred)
-                     ;; `lsp-auto-guess-root' MUST be non-nil.
-                     (setq lsp-buffer-uri (lsp--path-to-uri filename))
-                     (lsp-deferred))))))
+                (and (fboundp 'lsp-deferred) (lsp-deferred)))
+               (_ (user-error "LSP:: invalid `centaur-lsp' type")))))
          (put ',intern-pre 'function-documentation
               (format "Enable `%s' in the buffer of org source block (%s)."
                       centaur-lsp (upcase ,lang)))

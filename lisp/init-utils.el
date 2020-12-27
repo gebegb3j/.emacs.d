@@ -30,45 +30,81 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'init-const)
-  (require 'init-custom))
+(require 'init-const)
 
 ;; Display available keybindings in popup
 (use-package which-key
   :diminish
-  :bind (:map help-map ("C-h" . which-key-C-h-dispatch))
-  :hook (after-init . which-key-mode))
+  :bind ("C-h M-m" . which-key-show-major-mode)
+  :hook (after-init . which-key-mode)
+  :init (setq which-key-max-description-length 30
+              which-key-show-remaining-keys t)
+  :config
+  (which-key-add-key-based-replacements "C-c !" "flycheck")
+  (which-key-add-key-based-replacements "C-c &" "yasnippet")
+  (which-key-add-key-based-replacements "C-c c" "counsel")
+  (which-key-add-key-based-replacements "C-c n" "org-roam")
+  (which-key-add-key-based-replacements "C-c t" "hl-todo")
+  (which-key-add-key-based-replacements "C-c v" "ivy-view")
+  (which-key-add-key-based-replacements "C-c C-z" "browse")
 
-;; Youdao Dictionary
-(use-package youdao-dictionary
-  :bind (("C-c y" . my-youdao-search-at-point)
-         ("C-c Y" . youdao-dictionary-search-at-point))
-  :init
-  (setq url-automatic-caching t
-        youdao-dictionary-use-chinese-word-segmentation t) ; 中文分词
+  (which-key-add-key-based-replacements "C-x RET" "coding-system")
+  (which-key-add-key-based-replacements "C-x 8" "unicode")
+  (which-key-add-key-based-replacements "C-x @" "modifior")
+  (which-key-add-key-based-replacements "C-x X" "edebug")
+  (which-key-add-key-based-replacements "C-x a" "abbrev")
+  (which-key-add-key-based-replacements "C-x n" "narrow")
+  (which-key-add-key-based-replacements "C-x t" "tab")
+  (which-key-add-key-based-replacements "C-x C-a" "edebug")
 
-  (with-no-warnings
-    (defun my-youdao-search-at-point ()
-      "Search word at point and display result with `posframe', `pos-tip', or buffer."
-      (interactive)
-      (if (display-graphic-p)
-          (if emacs/>=26p
-              (youdao-dictionary-search-at-point-posframe)
-            (youdao-dictionary-search-at-point-tooltip))
-        (youdao-dictionary-search-at-point)))))
 
-;;
+  (which-key-add-major-mode-key-based-replacements 'emacs-lisp-mode
+    "C-c ," "overseer")
+  (which-key-add-major-mode-key-based-replacements 'python-mode
+    "C-c C-t" "python-skeleton")
+
+  (which-key-add-major-mode-key-based-replacements 'markdown-mode
+    "C-c C-a" "markdown-link")
+  (which-key-add-major-mode-key-based-replacements 'markdown-mode
+    "C-c C-c" "markdown-command")
+  (which-key-add-major-mode-key-based-replacements 'markdown-mode
+    "C-c C-s" "markdown-style")
+  (which-key-add-major-mode-key-based-replacements 'markdown-mode
+    "C-c C-t" "markdown-header")
+  (which-key-add-major-mode-key-based-replacements 'markdown-mode
+    "C-c C-x" "markdown-toggle")
+
+  (which-key-add-major-mode-key-based-replacements 'gfm-mode
+    "C-c C-a" "markdown-link")
+  (which-key-add-major-mode-key-based-replacements 'gfm-mode
+    "C-c C-c" "markdown-command")
+  (which-key-add-major-mode-key-based-replacements 'gfm-mode
+    "C-c C-s" "markdown-style")
+  (which-key-add-major-mode-key-based-replacements 'gfm-mode
+    "C-c C-t" "markdown-header")
+  (which-key-add-major-mode-key-based-replacements 'gfm-mode
+    "C-c C-x" "markdown-toggle"))
+
+;; Persistent the scratch buffer
+(use-package persistent-scratch
+  :diminish
+  :bind (:map persistent-scratch-mode-map
+         ([remap kill-buffer] . (lambda (&rest _)
+                                  (interactive)
+                                  (user-error "Scrach buffer cannot be killed")))
+         ([remap revert-buffer] . persistent-scratch-restore)
+         ([remap revert-this-buffer] . persistent-scratch-restore))
+  :hook ((after-init . persistent-scratch-autosave-mode)
+         (lisp-interaction-mode . persistent-scratch-mode)))
+
 ;; Search tools
-;;
-
 ;; Writable `grep' buffer
 (use-package wgrep
   :init
   (setq wgrep-auto-save-buffer t
         wgrep-change-readonly-file t))
 
-;; Fast search tool: `ripgrep'
+;; Fast search tool `ripgrep'
 (use-package rg
   :defines projectile-command-map
   :hook (after-init . rg-enable-default-bindings)
@@ -93,24 +129,86 @@
      ("R" . counsel-rg)
      ("F" . counsel-fzf))))
 
-;; Docker
-(use-package docker
-  :defines docker-image-run-arguments
-  :bind ("C-c d" . docker)
-  :init (setq docker-image-run-arguments '("-i" "-t" "--rm")
-              docker-container-shell-file-name "/bin/bash"))
+;; Dictionary
+(when sys/macp
+  (use-package osx-dictionary
+    :bind (("C-c D" . osx-dictionary-search-pointer))))
 
-;; Docker tramp
-(use-package docker-tramp)
+;; Youdao Dictionary
+(use-package youdao-dictionary
+  :commands youdao-dictionary-play-voice-of-current-word
+  :bind (("C-c y" . my-youdao-dictionary-search-at-point)
+         ("C-c Y" . youdao-dictionary-search-at-point)
+         :map youdao-dictionary-mode-map
+         ("h" . youdao-dictionary-hydra/body)
+         ("?" . youdao-dictionary-hydra/body))
+  :init
+  (setq url-automatic-caching t
+        youdao-dictionary-use-chinese-word-segmentation t) ; 中文分词
 
-;; A Simmple and cool pomodoro timer
+  (defun my-youdao-dictionary-search-at-point ()
+    "Search word at point and display result with `posframe', `pos-tip', or buffer."
+    (interactive)
+    (if (display-graphic-p)
+        (if emacs/>=26p
+            (youdao-dictionary-search-at-point-posframe)
+          (youdao-dictionary-search-at-point-tooltip))
+      (youdao-dictionary-search-at-point)))
+  :config
+  (with-eval-after-load 'hydra
+    (defhydra youdao-dictionary-hydra (:color blue)
+      ("p" youdao-dictionary-play-voice-of-current-word "play voice of current word")
+      ("y" youdao-dictionary-play-voice-at-point "play voice at point")
+      ("q" quit-window "quit")
+      ("C-g" nil nil)
+      ("h" nil nil)
+      ("?" nil nil)))
+
+  (with-no-warnings
+    (defun my-youdao-dictionary--posframe-tip (string)
+      "Show STRING using posframe-show."
+      (unless (and (require 'posframe nil t) (posframe-workable-p))
+        (error "Posframe not workable"))
+
+      (let ((word (youdao-dictionary--region-or-word)))
+        (if word
+            (progn
+              (with-current-buffer (get-buffer-create youdao-dictionary-buffer-name)
+                (let ((inhibit-read-only t))
+                  (erase-buffer)
+                  (youdao-dictionary-mode)
+                  (insert string)
+                  (goto-char (point-min))
+                  (set (make-local-variable 'youdao-dictionary-current-buffer-word) word)))
+              (posframe-show youdao-dictionary-buffer-name
+                             :left-fringe 8
+                             :right-fringe 8
+                             :internal-border-color (face-foreground 'font-lock-comment-face)
+                             :internal-border-width 1)
+              (unwind-protect
+                  (push (read-event) unread-command-events)
+                (progn
+                  (posframe-delete youdao-dictionary-buffer-name)
+                  (other-frame 0))))
+          (message "Nothing to look up"))))
+    (advice-add #'youdao-dictionary--posframe-tip
+                :override #'my-youdao-dictionary--posframe-tip)))
+
+;; A Simple and cool pomodoro timer
 (use-package pomidor
   :bind ("s-<f12>" . pomidor)
   :init
   (setq alert-default-style 'mode-line)
 
   (with-eval-after-load 'all-the-icons
-    (setq alert-severity-colors
+    (setq alert-severity-faces
+          '((urgent   . all-the-icons-red)
+            (high     . all-the-icons-orange)
+            (moderate . all-the-icons-yellow)
+            (normal   . all-the-icons-green)
+            (low      . all-the-icons-blue)
+            (trivial  . all-the-icons-purple))
+          alert-severity-colors
           `((urgent   . ,(face-foreground 'all-the-icons-red))
             (high     . ,(face-foreground 'all-the-icons-orange))
             (moderate . ,(face-foreground 'all-the-icons-yellow))
@@ -121,166 +219,56 @@
   (when sys/macp
     (setq pomidor-play-sound-file
           (lambda (file)
-            (start-process "pomidor-play-sound"
-                           nil
-                           "afplay"
-                           file)))))
-
-;; Persistent the scratch buffer
-(use-package persistent-scratch
-  :preface
-  (defun my-save-buffer ()
-    "Save scratch and other buffer."
-    (interactive)
-    (let ((scratch-name "*scratch*"))
-      (if (string-equal (buffer-name) scratch-name)
-          (progn
-            (message "Saving %s..." scratch-name)
-            (persistent-scratch-save)
-            (message "Wrote %s" scratch-name))
-        (save-buffer))))
-  :hook (after-init . persistent-scratch-setup-default)
-  :bind (:map lisp-interaction-mode-map
-         ("C-x C-s" . my-save-buffer)))
-
-;; PDF reader
-(when (display-graphic-p)
-  (use-package pdf-view
-    :ensure pdf-tools
-    :diminish (pdf-view-midnight-minor-mode pdf-view-printer-minor-mode)
-    :defines pdf-annot-activate-created-annotations
-    :functions (my-pdf-view-set-midnight-colors my-pdf-view-set-dark-theme)
-    :commands pdf-view-midnight-minor-mode
-    :mode ("\\.[pP][dD][fF]\\'" . pdf-view-mode)
-    :magic ("%PDF" . pdf-view-mode)
-    :bind (:map pdf-view-mode-map
-           ("C-s" . isearch-forward))
-    :init (setq pdf-annot-activate-created-annotations t)
-    :config
-    ;; WORKAROUND: Fix compilation errors on macOS.
-    ;; @see https://github.com/politza/pdf-tools/issues/480
-    (when sys/macp
-      (setenv "PKG_CONFIG_PATH"
-              "/usr/local/lib/pkgconfig:/usr/local/opt/libffi/lib/pkgconfig"))
-    (pdf-tools-install t nil t t)
-
-    ;; Set dark theme
-    (defun my-pdf-view-set-midnight-colors ()
-      "Set pdf-view midnight colors."
-      (setq pdf-view-midnight-colors
-            `(,(face-foreground 'default) . ,(face-background 'default))))
-
-    (defun my-pdf-view-set-dark-theme ()
-      "Set pdf-view midnight theme as color theme."
-      (my-pdf-view-set-midnight-colors)
-      (dolist (buf (buffer-list))
-        (with-current-buffer buf
-          (when (eq major-mode 'pdf-view-mode)
-            (pdf-view-midnight-minor-mode (if pdf-view-midnight-minor-mode 1 -1))))))
-
-    (my-pdf-view-set-midnight-colors)
-    (add-hook 'after-load-theme-hook #'my-pdf-view-set-dark-theme)
-
-    ;; FIXME: Support retina
-    ;; @see https://emacs-china.org/t/pdf-tools-mac-retina-display/10243/
-    ;; and https://github.com/politza/pdf-tools/pull/501/
-    (setq pdf-view-use-scaling t
-          pdf-view-use-imagemagick nil)
-    (with-no-warnings
-      (defun pdf-view-use-scaling-p ()
-        "Return t if scaling should be used."
-        (and (or (and (eq system-type 'darwin) (string-equal emacs-version "27.0.50"))
-                 (memq (pdf-view-image-type)
-                       '(imagemagick image-io)))
-             pdf-view-use-scaling))
-      (defun pdf-view-create-page (page &optional window)
-        "Create an image of PAGE for display on WINDOW."
-        (let* ((size (pdf-view-desired-image-size page window))
-               (width (if (not (pdf-view-use-scaling-p))
-                          (car size)
-                        (* 2 (car size))))
-               (data (pdf-cache-renderpage
-                      page width width))
-               (hotspots (pdf-view-apply-hotspot-functions
-                          window page size)))
-          (pdf-view-create-image data
-            :width width
-            :scale (if (pdf-view-use-scaling-p) 0.5 1)
-            :map hotspots
-            :pointer 'arrow))))
-
-    ;; Recover last viewed position
-    (when emacs/>=26p
-      (use-package pdf-view-restore
-        :hook (pdf-view-mode . pdf-view-restore-mode)
-        :init (setq pdf-view-restore-filename
-                    (locate-user-emacs-file ".pdf-view-restore"))))))
-
-;; Epub reader
-(use-package nov
-  :mode ("\\.epub\\'" . nov-mode)
-  :functions centaur-read-mode
-  :hook (nov-mode . my-nov-setup)
-  :init
-  (defun my-nov-setup ()
-    "Setup `nov-mode' for better reading experience."
-    (visual-line-mode 1)
-    (centaur-read-mode)
-    (face-remap-add-relative 'variable-pitch :family "Times New Roman" :height 1.5))
-  :config
-  ;; FIXME: errors while opening `nov' files with Unicode characters
-  ;; @see https://github.com/wasamasa/nov.el/issues/63
-  (with-no-warnings
-    (defun my-nov-content-unique-identifier (content)
-      "Return the the unique identifier for CONTENT."
-      (when-let* ((name (nov-content-unique-identifier-name content))
-                  (selector (format "package>metadata>identifier[id='%s']"
-                                    (regexp-quote name)))
-                  (id (car (esxml-node-children (esxml-query selector content)))))
-        (intern id)))
-    (advice-add #'nov-content-unique-identifier :override #'my-nov-content-unique-identifier))
-
-  ;; Fix encoding issue on Windows
-  (when sys/win32p
-    (setq process-coding-system-alist
-          (cons `(,nov-unzip-program . (gbk . gbk))
-                process-coding-system-alist))))
+            (when (executable-find "afplay")
+              (start-process "pomidor-play-sound" nil "afplay" file))))))
 
 ;; Nice writing
 (use-package olivetti
   :diminish
   :bind ("<f7>" . olivetti-mode)
-  :hook (olivetti-mode . (lambda ()
-                           (if olivetti-mode
-                               (text-scale-set +2)
-                             (text-scale-set 0))))
   :init (setq olivetti-body-width 0.618))
+
+;; Edit text for browsers with GhostText or AtomicChrome extension
+(use-package atomic-chrome
+  :hook ((emacs-startup . atomic-chrome-start-server)
+         (atomic-chrome-edit-mode . (lambda ()
+                                      "Enter edit mode and delete other windows."
+                                      (and (fboundp 'olivetti-mode)
+                                           (olivetti-mode 1))
+                                      (delete-other-windows))))
+  :init (setq atomic-chrome-buffer-open-style 'frame)
+  :config
+  (if (fboundp 'gfm-mode)
+      (setq atomic-chrome-url-major-mode-alist
+            '(("github\\.com" . gfm-mode)))))
 
 ;; Music player
 (use-package bongo
-  :functions (bongo-add-dired-files
-              dired-get-filename
-              dired-marker-regexp
-              dired-move-to-filename)
-  :commands (bongo-buffer
-             bongo-library-buffer-p
-             bongo-library-buffer)
   :bind ("C-<f9>" . bongo)
-  :init
+  :config
   (with-eval-after-load 'dired
-    (defun bongo-add-dired-files ()
-      "Add marked files to Bongo library"
-      (interactive)
-      (bongo-buffer)
-      (let (file (files nil))
-        (dired-map-over-marks
-         (setq file (dired-get-filename)
-               files (append files (list file)))
-         nil t)
-        (with-bongo-library-buffer
-         (mapc 'bongo-insert-file files)))
-      (bongo-switch-buffers))
-    (bind-key "b" #'bongo-add-dired-files dired-mode-map)))
+    (with-no-warnings
+      (defun bongo-add-dired-files ()
+        "Add marked files to the Bongo library."
+        (interactive)
+        (bongo-buffer)
+        (let (file (files nil))
+          (dired-map-over-marks
+           (setq file (dired-get-filename)
+                 files (append files (list file)))
+           nil t)
+          (with-bongo-library-buffer
+           (mapc 'bongo-insert-file files)))
+        (bongo-switch-buffers))
+      (bind-key "b" #'bongo-add-dired-files dired-mode-map))))
+
+;; Process
+(use-package proced
+  :ensure nil
+  :init
+  (setq-default proced-format 'verbose)
+  (setq proced-auto-update-flag t
+        proced-auto-update-interval 3))
 
 ;; IRC
 (use-package erc
@@ -313,7 +301,7 @@
   (ztreep-diff-model-diff-face ((t (:inherit diff-removed))))
   (ztreep-diff-model-add-face ((t (:inherit diff-nonexistent))))
   :pretty-hydra
-  ((:title (pretty-hydra-title "Ztree" 'octicon "diff" :height 1.2 :v-adjust 0)
+  ((:title (pretty-hydra-title "Ztree" 'octicon "diff" :face 'all-the-icons-green :height 1.1 :v-adjust 0)
     :color pink :quit-key "q")
    ("Diff"
     (("C" ztree-diff-copy "copy" :exit t)
@@ -338,13 +326,14 @@
 
 ;; Misc
 (use-package copyit)                    ; copy path, url, etc.
-(use-package daemons)                   ; system services/daemons
 (use-package diffview)                  ; side-by-side diff view
 (use-package esup)                      ; Emacs startup profiler
 (use-package focus)                     ; Focus on the current region
 (use-package list-environment)
 (use-package memory-usage)
-(use-package tldr)
+(unless sys/win32p
+  (use-package daemons)                 ; system services/daemons
+  (use-package tldr))
 
 (provide 'init-utils)
 

@@ -1,4 +1,4 @@
-;;; custom.el --- user customization file    -*- no-byte-compile: t -*-
+;;; custom.el --- user customization file    -*- lexical-binding: t no-byte-compile: t -*-
 ;;; Commentary:
 ;;;       Add or change the configurations in custom.el, then restart Emacs.
 ;;;       Put your own configurations in custom-post.el to override default configurations.
@@ -8,12 +8,17 @@
 ;; (setq centaur-full-name "user name")           ; User full name
 ;; (setq centaur-mail-address "user@email.com")   ; Email address
 ;; (setq centaur-proxy "127.0.0.1:1080")          ; Network proxy
-;; (setq centaur-package-archives 'emacs-china)   ; Package repo: melpa, melpa-mirror, emacs-china, netease, tencent or tuna
-;; (setq centaur-theme 'light)                    ; Color theme: default, classic, colorful, dark, light, day or night
+;; (setq centaur-server nil)                      ; Enable `server-mode' or not: t or nil
+;; (setq centaur-icon nil)                        ; Display icons or not: t or nil
+;; (setq centaur-package-archives 'emacs-china)   ; Package repo: melpa, emacs-china, netease, ustc, tencent or tuna
+;; (setq centaur-theme 'light)                    ; Color theme: auto, random, default, classic, colorful, dark, light, day or night
 ;; (setq centaur-dashboard nil)                   ; Use dashboard at startup or not: t or nil
+;; (setq centaur-restore-frame-geometry nil)      ; Restore the frame's geometry at startup: t or nil
 ;; (setq centaur-lsp 'eglot)                      ; Set LSP client: lsp-mode, eglot or nil
-;; (setq centaur-chinese-calendar nil)            ; Use Chinese calendar or not: t or nil
-;; (setq centaur-prettify-symbols-alist nil)      ; Alist of symbol prettifications
+;; (setq centaur-lsp-format-on-save-ignore-modes '(c-mode c++-mode)) ; Ignore format on save for some languages
+;; (setq centaur-chinese-calendar t)              ; Use Chinese calendar or not: t or nil
+;; (setq centaur-prettify-symbols-alist nil)      ; Alist of symbol prettifications. Nil to use font supports ligatures.
+;; (setq centaur-prettify-org-symbols-alist nil)  ; Alist of symbol prettifications for `org-mode'
 ;; (setq centaur-benchmark-init t)                ; Enable initialization benchmark or not: t or nil
 
 ;; For Emacs devel
@@ -34,9 +39,9 @@
                                                     (t 100))))
 
   ;; Specify font for all unicode characters
-  (cl-loop for font in '("Symbola" "Apple Symbols" "Symbol" "icons-in-terminal")
+  (cl-loop for font in '("Apple Color Emoji" "Symbola" "Symbol")
            when (font-installed-p font)
-           return (set-fontset-font t 'unicode font nil 'prepend))
+           return(set-fontset-font t 'unicode font nil 'prepend))
 
   ;; Specify font for Chinese characters
   (cl-loop for font in '("WenQuanYi Micro Hei" "Microsoft Yahei")
@@ -51,6 +56,12 @@
 ;;       smtpmail-default-smtp-server "smtp.gmail.com"
 ;;       smtpmail-smtp-server "smtp.gmail.com"
 ;;       smtpmail-smtp-service 587)
+
+;; Calendar
+;; Set location , then press `S' can show the time of sunrise and sunset
+;; (setq calendar-location-name "Chengdu"
+;;       calendar-latitude 30.67
+;;       calendar-longitude 104.07)
 
 ;; Misc.
 ;; (setq confirm-kill-emacs 'y-or-n-p)

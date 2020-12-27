@@ -30,8 +30,7 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'init-custom))
+(require 'init-custom)
 
 ;; Prettify Symbols
 ;; e.g. display “lambda” as “λ”
@@ -56,15 +55,14 @@
     (("i" dumb-jump-go-prompt "Prompt")
      ("l" dumb-jump-quick-look "Quick look")
      ("b" dumb-jump-back "Back"))))
-  :bind (:map dumb-jump-mode-map
-         ("M-g o" . dumb-jump-go-other-window)
+  :bind (("M-g o" . dumb-jump-go-other-window)
          ("M-g j" . dumb-jump-go)
          ("M-g i" . dumb-jump-go-prompt)
          ("M-g x" . dumb-jump-go-prefer-external)
          ("M-g z" . dumb-jump-go-prefer-external-other-window)
          ("C-M-j" . dumb-jump-hydra/body))
-  :hook (after-init . dumb-jump-mode)
-  :config
+  :init
+  (add-hook 'xref-backend-functions #'dumb-jump-xref-activate)
   (setq dumb-jump-prefer-searcher 'rg
         dumb-jump-selector 'ivy))
 
@@ -75,19 +73,25 @@
 ;; Run commands quickly
 (use-package quickrun
   :bind (("C-<f5>" . quickrun)
-         ("C-c x" . quickrun)))
+         ("C-c X" . quickrun)))
 
 (use-package cask-mode)
 (use-package csharp-mode)
 (use-package csv-mode)
-(use-package dockerfile-mode)
+(use-package julia-mode)
 (use-package lua-mode)
+(use-package mermaid-mode)
 (use-package plantuml-mode)
 (use-package powershell)
 (use-package rmsbolt)                   ; A compiler output viewer
 (use-package scala-mode)
 (use-package swift-mode)
 (use-package vimrc-mode)
+
+(use-package protobuf-mode
+  :hook (protobuf-mode . (lambda ()
+                           (setq imenu-generic-expression
+                                 '((nil "^[[:space:]]*\\(message\\|service\\|enum\\)[[:space:]]+\\([[:alnum:]]+\\)" 2))))))
 
 (use-package nxml-mode
   :ensure nil

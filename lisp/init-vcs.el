@@ -30,32 +30,50 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'init-const)
-  (require 'init-custom))
+(require 'init-const)
 
 ;; Git
+;; See `magit-maybe-define-global-key-bindings'
 (use-package magit
-  :mode (("\\COMMIT_EDITMSG\\'" . text-mode)
-         ("\\MERGE_MSG\\'" . text-mode))
-  :bind (("C-x g" . magit-status)
-         ("C-x M-g" . magit-dispatch)
-         ("C-c M-g" . magit-file-popup))
+  :init (setq magit-diff-refine-hunk t)
   :config
   (when sys/win32p
     (setenv "GIT_ASKPASS" "git-gui--askpass"))
 
-  (if (fboundp 'transient-append-suffix)
-      ;; Add switch: --tags
-      (transient-append-suffix 'magit-fetch
-        "-p" '("-t" "Fetch all tags" ("-t" "--tags"))))
+  (when (fboundp 'transient-append-suffix)
+    ;; Add switch: --tags
+    (transient-append-suffix 'magit-fetch
+      "-p" '("-t" "Fetch all tags" ("-t" "--tags"))))
+
+  ;; Exterminate Magit buffers
+  (with-no-warnings
+    (defun my-magit-kill-buffers (&rest _)
+      "Restore window configuration and kill all Magit buffers."
+      (interactive)
+      (magit-restore-window-configuration)
+      (let ((buffers (magit-mode-get-buffers)))
+        (when (eq major-mode 'magit-status-mode)
+          (mapc (lambda (buf)
+                  (with-current-buffer buf
+                    (if (and magit-this-process
+                             (eq (process-status magit-this-process) 'run))
+                        (bury-buffer buf)
+                      (kill-buffer buf))))
+                buffers))))
+    (setq magit-bury-buffer-function #'my-magit-kill-buffers))
 
   ;; Access Git forges from Magit
   (when (executable-find "cc")
-    (use-package forge :demand))
+    (use-package forge
+      :demand
+      :init (setq forge-topic-list-columns
+                  '(("#" 5 forge-topic-list-sort-by-number (:right-align t) number nil)
+                    ("Title" 60 t nil title  nil)
+                    ("State" 6 t nil state nil)
+                    ("Updated" 10 t nil updated nil)))))
 
   ;; Show TODOs in magit
-  (when (and emacs/>=25.2p (not sys/win32p))
+  (when emacs/>=25.2p
     (use-package magit-todos
       :init
       (setq magit-todos-nice (if (executable-find "nice") t nil))
@@ -67,7 +85,10 @@
   (git-timemachine-minibuffer-author-face ((t (:inherit success))))
   (git-timemachine-minibuffer-detail-face ((t (:inherit warning))))
   :bind (:map vc-prefix-map
-         ("t" . git-timemachine)))
+         ("t" . git-timemachine))
+  :hook (before-revert . (lambda ()
+                           (when (bound-and-true-p git-timemachine-mode)
+                             (user-error "Cannot revert the timemachine buffer")))))
 
 ;; Pop up last commit information of current line
 (use-package git-messenger
@@ -133,8 +154,8 @@
                                 :string popuped-message
                                 :left-fringe 8
                                 :right-fringe 8
-                                :internal-border-color (face-foreground 'default)
-                                :internal-border-width 1)
+                                :internal-border-width 1
+                                :internal-border-color (face-foreground 'font-lock-comment-face))
                  (unwind-protect
                      (push (read-event) unread-command-events)
                    (posframe-delete buffer-name))))

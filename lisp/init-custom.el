@@ -25,20 +25,19 @@
 
 ;;; Commentary:
 ;;
-;; Customizations.
+;; Customization.
 ;;
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'init-const))
-
 (defgroup centaur nil
-  "Centaur Emacs customizations."
+  "Centaur Emacs customization."
   :group 'convenience
   :link '(url-link :tag "Homepage" "https://github.com/seagle0128/.emacs.d"))
 
-(defcustom centaur-logo (expand-file-name "logo.png" user-emacs-directory)
+(defcustom centaur-logo (expand-file-name
+                         (if (display-graphic-p) "logo.png" "banner.txt")
+                         user-emacs-directory)
   "Set Centaur logo. nil means official logo."
   :group 'centaur
   :type 'string)
@@ -53,12 +52,28 @@
   :group 'centaur
   :type 'string)
 
+(defcustom centaur-org-directory (expand-file-name "~/org/")
+  "Set org directory."
+  :group 'centaur
+  :type 'string)
+
 (defcustom centaur-proxy "127.0.0.1:1087"
   "Set network proxy."
   :group 'centaur
   :type 'string)
 
-;; ELPA: refer to https://github.com/melpa/melpa and https://elpa.emacs-china.org/.
+(defcustom centaur-server t
+  "Enable `server-mode' or not."
+  :group 'centaur
+  :type 'boolean)
+
+(defcustom centaur-icon (display-graphic-p)
+  "Display icons or not."
+  :group 'centaur
+  :type 'boolean)
+
+;; Emacs Lisp Package Archive (ELPA)
+;; @see https://github.com/melpa/melpa and https://elpa.emacs-china.org/.
 (defcustom centaur-package-archives-alist
   (let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
                       (not (gnutls-available-p))))
@@ -66,15 +81,15 @@
     `(,(cons 'melpa
              `(,(cons "gnu"   (concat proto "://elpa.gnu.org/packages/"))
                ,(cons "melpa" (concat proto "://melpa.org/packages/"))))
-      ,(cons 'melpa-mirror
-             `(,(cons "gnu"   (concat proto "://elpa.gnu.org/packages/"))
-               ,(cons "melpa" (concat proto "://www.mirrorservice.org/sites/melpa.org/packages/"))))
       ,(cons 'emacs-china
              `(,(cons "gnu"   (concat proto "://elpa.emacs-china.org/gnu/"))
                ,(cons "melpa" (concat proto "://elpa.emacs-china.org/melpa/"))))
       ,(cons 'netease
              `(,(cons "gnu"   (concat proto "://mirrors.163.com/elpa/gnu/"))
                ,(cons "melpa" (concat proto "://mirrors.163.com/elpa/melpa/"))))
+      ,(cons 'ustc
+             `(,(cons "gnu"   (concat proto "://mirrors.ustc.edu.cn/elpa/gnu/"))
+               ,(cons "melpa" (concat proto "://mirrors.ustc.edu.cn/elpa/melpa/"))))
       ,(cons 'tencent
              `(,(cons "gnu"   (concat proto "://mirrors.cloud.tencent.com/elpa/gnu/"))
                ,(cons "melpa" (concat proto "://mirrors.cloud.tencent.com/elpa/melpa/"))))
@@ -103,21 +118,56 @@
                               name)))
                     centaur-package-archives-alist)))
 
-(defcustom centaur-theme 'default
-  "Set color theme."
+(defcustom centaur-theme-alist
+  '((default  . doom-one)
+    (classic  . doom-monokai-classic)
+    (dark     . doom-dark+)
+    (light    . doom-one-light)
+    (warm     . doom-solarized-light)
+    (cold     . doom-city-lights)
+    (day      . doom-tomorrow-day)
+    (night    . doom-tomorrow-night))
+  "List of themes mapped to internal themes."
   :group 'centaur
-  :type '(choice
-          (const :tag "Default theme" default)
-          (const :tag "Classic theme" classic)
-          (const :tag "Dark theme" dark)
-          (const :tag "Light theme" light)
-          (const :tag "Day theme" day)
-          (const :tag "night theme" night)
-          symbol))
+  :type '(alist :key-type (symbol :tag "Theme")
+                :value-type (symbol :tag "Internal theme")))
+
+(defcustom centaur-auto-themes '(("8:00"  . doom-one-light)
+				                 ("19:00" . doom-one))
+  "List of themes mapped to the time they should be loaded.
+
+The keywords `:sunrise' and `:sunset' can be used for the time
+if `calendar-latitude' and `calendar-longitude' are set.
+For example:
+  '((:sunrise . doom-one-light)
+    (:sunset  . doom-one))"
+  :group 'centaur
+  :type `(alist :key-type (string :tag "Time")
+                :value-type (symbol :tag "Theme")))
+
+(defcustom centaur-theme 'default
+  "The color theme."
+  :group 'centaur
+  :type `(choice (const :tag "Auto" 'auto)
+                 (const :tag "Random" 'random)
+                 ,@(mapcar
+                    (lambda (item)
+                      (let ((name (car item)))
+                        (list 'const
+                              :tag (capitalize (symbol-name name))
+                              name)))
+                    centaur-theme-alist)
+                 symbol))
 
 (defcustom centaur-dashboard t
   "Use dashboard at startup or not.
 If Non-nil, use dashboard, otherwise will restore previous session."
+  :group 'centaur
+  :type 'boolean)
+
+(defcustom centaur-restore-frame-geometry t
+  "Restore the frame's geometry at startup.
+If Non-nil, save and restore the frame's geometry."
   :group 'centaur
   :type 'boolean)
 
@@ -126,10 +176,17 @@ If Non-nil, use dashboard, otherwise will restore previous session."
   :group 'centaur
   :type '(choice
           (const :tag "LSP Mode" 'lsp-mode)
-          (const :tag "eglot" 'eglot)
+          (const :tag "Eglot" 'eglot)
           nil))
 
-(defcustom centaur-chinese-calendar t
+(defcustom centaur-lsp-format-on-save-ignore-modes '(c-mode c++-mode python-mode)
+  "The modes that don't auto format and organize imports while saving the buffers.
+`prog-mode' means ignoring all derived modes.
+"
+  :group 'centaur
+  :type '(repeat (symbol :tag "Major-Mode")))
+
+(defcustom centaur-chinese-calendar nil
   "Use Chinese calendar or not."
   :group 'centaur
   :type 'boolean)
@@ -153,7 +210,34 @@ If Non-nil, use dashboard, otherwise will restore previous session."
     ("&&" . ?∧)
     ("||" . ?∨)
     ("not" . ?¬))
-  "Alist of symbol prettifications."
+  "Alist of symbol prettifications.
+Nil to use font supports ligatures."
+  :group 'centaur
+  :type '(alist :key-type string :value-type (choice character sexp)))
+
+(defcustom centaur-prettify-org-symbols-alist
+  '(("[ ]" . ?☐)
+    ("[X]" . ?☑)
+    ("[-]" . ?⛝)
+
+    ("#+ARCHIVE:" . ?📦)
+    ("#+AUTHOR:" . ?👤)
+    ("#+CREATOR:" . ?💁)
+    ("#+DATE:" . ?📆)
+    ("#+DESCRIPTION:" . ?⸙)
+    ("#+EMAIL:" . ?📧)
+    ("#+OPTIONS:" . ?⛭)
+    ("#+SETUPFILE:" . ?⛮)
+    ("#+TAGS:" . ?🏷)
+    ("#+TITLE:" . ?📓)
+
+    ("#+BEGIN_SRC" . ?✎)
+    ("#+END_SRC" . ?□)
+    ("#+BEGIN_QUOTE" . ?»)
+    ("#+END_QUOTE" . ?«)
+    ("#+HEADERS" . ?☰)
+    ("#+RESULTS:" . ?💻))
+  "Alist of symbol prettifications for `org-mode'."
   :group 'centaur
   :type '(alist :key-type string :value-type (choice character sexp)))
 
@@ -163,26 +247,7 @@ If Non-nil, use dashboard, otherwise will restore previous session."
   :type 'boolean)
 
 ;; Load `custom-file'
-;; If it doesn't exist, copy from the template, then load it.
 (setq custom-file (expand-file-name "custom.el" user-emacs-directory))
-
-(let ((custom-example-file
-       (expand-file-name "custom-example.el" user-emacs-directory)))
-  (if (and (file-exists-p custom-example-file)
-           (not (file-exists-p custom-file)))
-      (copy-file custom-example-file custom-file)))
-
-(if (file-exists-p custom-file)
-    (load custom-file))
-
-;; Load `custom-post.el'
-;; Put personal configurations to override defaults here.
-(add-hook 'after-init-hook
-          (lambda ()
-            (let ((file
-                   (expand-file-name "custom-post.el" user-emacs-directory)))
-              (if (file-exists-p file)
-                  (load file)))))
 
 (provide 'init-custom)
 

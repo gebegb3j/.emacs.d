@@ -30,8 +30,7 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'init-custom))
+(require 'init-custom)
 
 (use-package css-mode
   :ensure nil
@@ -46,11 +45,6 @@
 ;; New `less-css-mde' in Emacs 26
 (unless (fboundp 'less-css-mode)
   (use-package less-css-mode))
-
-;; CSS eldoc
-(use-package css-eldoc
-  :commands turn-on-css-eldoc
-  :hook ((css-mode scss-mode less-css-mode) . turn-on-css-eldoc))
 
 ;; JSON mode
 (use-package json-mode)
@@ -120,6 +114,7 @@
 ;; Format HTML, CSS and JavaScript/JSON
 ;; Install: npm -g install prettier
 (use-package prettier-js
+  :diminish
   :hook ((js-mode js2-mode json-mode web-mode css-mode sgml-mode html-mode)
          .
          prettier-js-mode))
